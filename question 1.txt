@@ -1,0 +1,82 @@
+﻿#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/types.h>
+
+#define NUM_CHILDREN 3
+
+void signalHandler(int sig) {
+    printf("Interrupt message received by Child\n");
+}
+
+int main() {
+    pid_t child_pids[NUM_CHILDREN];
+    int child_id;
+    int pipes[NUM_CHILDREN][2];
+
+    // Create pipes
+    for (int i = 0; i < NUM_CHILDREN; i++) {
+        if (pipe(pipes[i]) == -1) {
+            perror("Pipe creation failed");
+            exit(1);
+        }
+    }
+
+    // Fork child processes
+    for (int i = 0; i < NUM_CHILDREN; i++) {
+        child_pids[i] = fork();
+
+        if (child_pids[i] < 0) {
+            perror("Fork failed");
+            exit(1);
+        } else if (child_pids[i] == 0) {
+            child_id = i + 1;  // Child process ID
+            break;
+        }
+    }
+
+    if (child_id == 0) {
+        // Parent process
+        printf("Parent process with PID %d\n", getpid());
+
+        // Close unnecessary pipe ends
+        for (int i = 0; i < NUM_CHILDREN; i++) {
+            close(pipes[i][0]);  // Close read end of the pipe
+        }
+
+        // Send messages to children
+        for (int i = 0; i < NUM_CHILDREN; i++) {
+            char message[] = "Message from parent";
+            write(pipes[i][1], message, sizeof(message));
+        }
+
+        // Wait for children to complete
+        for (int i = 0; i < NUM_CHILDREN; i++) {
+            wait(NULL);
+        }
+    } else {
+        // Child process
+        printf("Child process %d with PID %d\n", child_id, getpid());
+
+        // Close unnecessary pipe ends
+        for (int i = 0; i < NUM_CHILDREN; i++) {
+            close(pipes[i][1]);  // Close write end of the pipe
+        }
+
+        // Read message from parent
+        char message[100];
+        read(pipes[child_id - 1][0], message, sizeof(message));
+        printf("Message received by Child %d: %s\n", child_id, message);
+
+        // Register signal handler
+        signal(SIGINT, signalHandler);
+
+        // Child process work
+        while (1) {
+            // Child process work
+        }
+    }
+
+    return 0;
+}
